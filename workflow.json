@@ -1,0 +1,1615 @@
+{
+  "name": "TelegramRAG v2",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2240,
+        384
+      ],
+      "id": "b8738103-fc19-419e-aac1-e9ea2fa73686",
+      "name": "Telegram Trigger",
+      "webhookId": "<>",
+      "retryOnFail": true,
+      "maxTries": 2,
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Проверка наличия номера').item.json.originalText }}",
+        "options": {
+          "systemMessage": "=РОЛЬ\nТы — ассистент группы компаний «СТиМ» (материалы и спецтехника для дорожной разметки).\n\nИНСТРУМЕНТЫ\n- Q&A — точные ответы из Postgres.\n- Vector — полнотекст/семантика по расширенным материалам.\n- No_answer — записать вопрос без ответа.\n- Add_number — сохранить телефон клиента.\n\nТЕМА\nСчитается «не по теме»: политика, общество и образ жизни , новости и происшествия, пищевая промышленность, финансы и инвестиции, образование и карьера, технологии не связанные с дорожной инфраструктурой, религия, философия, искусство, а также юмор и личные разговоры.\nСинонимы для уточнения запросов: \"МСШ\", \"СШ\", «машина», «техника», «агрегат», «оборудование», «аппарат», «комплекс», «разметочная машина», «краска», «термопластик», «стеклошарики», «холодный/горячий пластик», «знаконоситель», «разметчик» и т.п.\n\nГЛАВНОЕ ПРАВИЛО ЦИКЛА\nКаждое новое сообщение пользователя обрабатывай как НОВЫЙ ЗАПРОС: ВСЕГДА при вопросе вызови Q&A, независимо от прошлого контекста/памяти.\n\nАЛГОРИТМ (строго по порядку)\n1) ВСЕГДА при вопросе вызови Q&A и Vector Store c актуальной формулировкой вопроса (+ тематические синонимы при необходимости) и попробуй найти там ответ.\n- Если в Q&A имеется релевантный ответ и в ответе есть упоминание страниц (например, стр. 21-22) или пунктов (П.3.11) → всегда дополняй ответ информацией из Vector Store → верни ответ в формате json {\"Ответ\": <ответ>, \"id_вопроса\": <id вопроса из столбца id>}, в ином случае - {\"Ответ\": <ответ>}\n2) Классификация:\n- Если вопрос явно вне темы → вежливо откажи: \n«Похоже, это не относится к деятельности компании или вопрос надо перефразировать, поэтому я не могу ответить.»\n- Если вопрос по теме, но ответ не найден после шагов поиска в Q&A и Vector Store → перейди к шагу 4.\n3) Нет ответа по теме после поиска в Q&A и Vector Store:\n- Вызови No_answer (зафиксируй вопрос).\n- Ответ: «Этого вопроса пока нет в нашей базе. Напишите, пожалуйста, номер телефона, и мы перезвоним вам с ответом.»\n- Далее жди номер.\n4) Телефон:\n- Если сообщение содержит ТОЛЬКО номер («мой номер…», «телефон…», «+7…», «8(9…)…», «+375…», «375…») → НЕ вызывать Q&A/Vector Store, сразу Add_number и ответь:\n«Спасибо! Ваш вопрос передан в службу поддержки. Мы свяжемся с вами в ближайшее время.»\n- Если номер некорректен → попроси формат «+7…» или «+375…».\n\nЖЁСТКИЕ ЗАПРЕТЫ\n- Никаких «общих рекомендаций» и домыслов, если их не вернул Q&A/Vector store.\n- Не дополняй ответы собственными предположениями.\n- Если инструмент недоступен/ошибка — сообщи: «Техническая ошибка: не удалось обратиться к базе. Попробуйте ещё раз.»\n\nСТИЛЬ\nКоротко, точно, по делу, дружелюбно."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        384
+      ],
+      "id": "ec9dc32c-400b-4245-a547-e563ae622309",
+      "name": "AI Agent",
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "contextWindowLength": 1
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -224,
+        608
+      ],
+      "id": "405839b6-617f-47a8-b39a-12ee0420aa91",
+      "name": "Postgres Chat Memory",
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "qa",
+          "mode": "list",
+          "cachedResultName": "qa"
+        },
+        "returnAll": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Return_All', ``, 'boolean') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        -96,
+        608
+      ],
+      "id": "b98600ae-f6d1-4d16-a0b7-e8a8a618c86b",
+      "name": "Q&A",
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Ответы на вопросы пользователей, дополняя Q&A. Если в Vector store тоже нет ответа, то не надо давать никаких рекомендаций",
+        "tableName": "documents",
+        "topK": 3,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        256,
+        592
+      ],
+      "id": "832137b0-81a1-49f6-9e96-adb99ad07bbb",
+      "name": "Vector store",
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Nonanswered_questions",
+          "mode": "list",
+          "cachedResultName": "Nonanswered_questions"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telegram_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "question": "={{ $('Проверка наличия номера').item.json.originalText }}",
+            "username": "={{ $('Telegram Trigger').item.json.message.chat.username }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "question",
+              "displayName": "question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telegram_id",
+              "displayName": "telegram_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        32,
+        608
+      ],
+      "id": "e9c39155-0e93-49ef-8658-1208c73ace69",
+      "name": "No_answer",
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "id": "09aec99e-d6ea-4b3f-8ad1-5bcd98b1ed81",
+      "name": "Download Voice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1664,
+        240
+      ],
+      "webhookId": "fda2301b-dce4-4b73-9941-626f8d577787",
+      "retryOnFail": true,
+      "maxTries": 2,
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Api-Key <>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "id": "f1e9cba3-81de-4f8d-bb9c-0308bbd48f7c",
+      "name": "Transcribe Voice (YandexSpeechKit)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1504,
+        240
+      ],
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Nonanswered_questions",
+          "mode": "list",
+          "cachedResultName": "Nonanswered_questions"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telegram_id": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+            "phone_number": "={{ $('Проверка наличия номера').item.json.phone }}"
+          },
+          "matchingColumns": [
+            "telegram_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "question",
+              "displayName": "question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "telegram_id",
+              "displayName": "telegram_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone_number",
+              "displayName": "phone_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        144,
+        608
+      ],
+      "id": "3a4ea470-07af-417a-91ec-8b60c57b346b",
+      "name": "Add number",
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "import re\n\nitems_out = []\n\nfor item in items:\n    data = item.get(\"json\", {})\n\n    # Берём текст из возможных полей\n    text = (\n        data.get(\"text\")\n        or data.get(\"message\")\n        or data.get(\"content\")\n        or \"\"\n    )\n\n    # Ищем телефон в русском формате\n    match = re.search(r'(?:\\+7|8)\\s*\\(?\\d{3}\\)?[\\s-]?\\d{3}[\\s-]?\\d{2}[\\s-]?\\d{2}', text)\n\n    if not match:\n        # если не нашли — возвращаем флаг\n        items_out.append({\n            \"json\": {\n                \"hasPhone\": False,\n                \"originalText\": text,\n            }\n        })\n    else:\n        # match.group(0) — найденный кусок\n        clean = re.sub(r'[^\\d+]', '', match.group(0))\n\n        items_out.append({\n            \"json\": {\n                \"hasPhone\": True,\n                \"phone\": clean,\n                \"originalText\": text,\n            }\n        })\n\n# n8n в Python-узле ожидает вернуть список items\nreturn items_out\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        -448
+      ],
+      "id": "201ca827-6726-4d1a-8d80-98746f7347b6",
+      "name": "Code in Python (Native) (Beta)"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt://<>/yandexgpt/rc",
+          "mode": "list",
+          "cachedResultName": "gpt://<>/yandexgpt/rc"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -384,
+        592
+      ],
+      "id": "30d83db9-7d44-4555-98bb-b35f47295ecf",
+      "name": "YandexGPT",
+    },
+    {
+      "parameters": {
+        "model": "emb://<>/text-embeddings/latest",
+        "options": {
+          "batchSize": 1,
+          "encodingFormat": "float"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        784
+      ],
+      "id": "54102408-b68a-4c2a-9eb2-f1c9a4323daa",
+      "name": "Embeddings YandexGPT",
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.originalText }}",
+        "options": {
+          "systemMessage": "Ты – ассистент группы компаний «СТиМ», производителя материалов и спецтехники для дорожной разметки. \nУ тебя есть инструменты:\n1. Q&A (основная база точных ответов, Postgres).\n2. Vector store (полнотекстовый и семантический поиск по расширенной базе и документам).\n3. No_answer (записать вопрос пользователя, если ответа нет).\n4. Add number (сохранить номер телефона пользователя к его вопросу, чтобы с ним связалась поддержка).\nКлючевые определения:\n- «Тематика компании» = разметка дорог, материалы для разметки, разметочная техника/спецтехника, поставки/условия/цены/сервис «СТиМ».\n- Слова-синонимы, которые потенциально относятся к тематике: «машина», «техника», «агрегат», «оборудование», «аппарат», «комплекс», «разметочная машина», «краска», «термопластик», «стеклошарики», «холодный/горячий пластик», «знаконоситель», «бункер», «разметчик» и т.п.\nАлгоритм (обязательный к выполнению в указанном порядке):\n1) Всегда выполнять 1 (один) запрос в Tool — Q&A по актуальной формулировке вопроса пользователя, \n   даже если вопрос кажется «вне тематики». \n   - Используй расширение запроса с тематическими синонимами (например, «машина» → «разметочная машина/спецтехника»).\n   - Если Q&A вернул уверенное совпадение — ответить кратко и по делу.\n2) Если уверенного ответа из Q&A нет — выполнить 1 (один) запрос в Tool — Vector store.\n3) Классификация «по теме / вне темы»:\n   - Если после шагов 1–2 нет релевантных результатов И при этом вопрос явно не про дорожную разметку/материалы/спецтехнику/«СТиМ» → вежливо отказать: \n     «Похоже, это не относится к нашей компании, поэтому я не могу ответить».\n   - Иначе (вопрос по теме, но ответа в базах нет) → перейти к шагу 4.\n4) Если вопрос по тематике, но ответа нет в Q&A и Vector:\n   - Вызвать Tool — No_answer (записать вопрос).\n   - Ответ пользователю: \n     «Этого вопроса пока нет в нашей базе. Напишите, пожалуйста, номер телефона, и мы перезвоним вам с ответом.»\n   - Дальше ожидать номер.\n5) Обработка номера телефона:\n   - Если сообщение содержит ТОЛЬКО номер или фразы «мой номер …», «телефон …», «+7…», «8 (9…)…», «+375…» — \n     НЕ выполнять шаги 1–2, сразу вызвать Tool — Add number и ответить:\n     «Спасибо! Ваш вопрос передан в службу поддержки. Мы свяжемся с вами в ближайшее время.»\n   - Если номер некорректный (нет цифр/маски) — попросить прислать номер в формате «+7…» или «+375…».\n6) Разрешение конфликтов правил:\n   - Если какой-либо шаг противоречит другому, приоритет: (1) обязательный вызов Q&A → (2) Vector store → (3) классификация тематики → (4) No_answer/Add number.\n7) Стиль ответа:\n   - Кратко, по делу, деловой и дружелюбный тон. Не выдумывать фактов.\n   - Если в вопросе несколько тем, сначала обработать, что относится к «СТиМ».\nПримеры (few-shot):\n- Вопрос: «Какая краска лучше для трассы Р-256?»\n  Действия: Q&A → (если нет) Vector → (если нет) No_answer → запрос телефона.\n- Вопрос: «У меня сломалась машина, что делать?»\n  Действия: Q&A (с расширением «машина»→«разметочная машина/спецтехника») → \n            Если ничего по теме — вежливый отказ («не относится к нашей компании»).\n- Вопрос: «Сколько стоит ваша машина для холодного пластика?»\n  Действия: Q&A → (если нет) Vector → (если нет) No_answer → запрос телефона.\n- Сообщение: «мой номер +7 9ХХ ХХХ-ХХ-ХХ»\n  Действия: сразу Add number → «Спасибо! …»"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -400,
+        -640
+      ],
+      "id": "56b81362-f648-4206-a1c8-0d619ea874a5",
+      "name": "AI Agent1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "sendSticker",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "file": "CAACAgIAAxkBAAEPsyxpCfJJnW9dOj0Pp2i8VoVckcodRwACtyMAAqy8CEkD6uFg8b0_UzYE",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        -320
+      ],
+      "id": "2e81c4b9-cb54-41c5-926f-fc99df7bb016",
+      "name": "Send a sticker",
+      "webhookId": "f78975bf-3cdb-4b45-bab5-d4ec68d50415",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Проверяю в базе знаний..⏳",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -784,
+        416
+      ],
+      "id": "9965a25b-71c5-44f8-8b10-370ee6ffc0e3",
+      "name": "Сообщение о проверке",
+      "webhookId": "c13d412f-5975-4f16-86c6-25034386962c",
+      "retryOnFail": true,
+      "maxTries": 2,
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $('id, ответ').item.json['ответ'] }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        928,
+        576
+      ],
+      "id": "64f6edfd-3b13-4da3-8827-110953bab3a0",
+      "name": "Send a text message",
+      "webhookId": "4e5dd914-aa73-4071-a0c1-10cfa9b9214c",
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "=userText",
+              "value": "={{\n  $if(\n    $('Transcribe Voice (YandexSpeechKit)').isExecuted,\n    // если нода распознавания запускалась — берём её результат\n    $('Transcribe Voice (YandexSpeechKit)').item.json.result,\n    // иначе — обычный текст из Telegram\n    $('Telegram Trigger').item.json.message.text\n  )\n}}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "chatId",
+              "value": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "username",
+              "value": "={{ $('Telegram Trigger').item.json.message.chat.username }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "81b85407-77ea-4940-b95d-662d18d1cd87",
+      "name": "Сбор информации",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1344,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Берём текст сообщения\nconst text =  $input.first().json.userText || \"\";\n\n// Ищем телефон в русском формате\nconst match = text.match(/(\\+7|8|\\+375|375|7)\\s*\\(?(?:\\d{2,3})\\)?[\\s-]?\\d{3}[\\s-]?\\d{2}[\\s-]?\\d{2}/);\n\nif (!match) {\n  // если не нашли — можно вернуть флаг\n  return [{\n    hasPhone: false,\n    originalText: text,\n  }];\n}\n\n// match[0] — это то, что нашли\n// очищаем от пробелов и скобок\nconst clean = match[0].replace(/[^\\d+]/g, '');\n\nreturn [{\n  hasPhone: true,\n  phone: clean,\n  originalText: text,\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        384
+      ],
+      "id": "36a8a2ab-b4a8-47ed-8653-ac4abbadfe85",
+      "name": "Проверка наличия номера"
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -2048,
+        192
+      ],
+      "id": "3d2fe71c-e791-4324-8a7f-ccc8e8495cd9",
+      "name": "Typing...1",
+      "webhookId": "c98afea1-ac5f-4b99-b1a3-08ca8371350f",
+      "alwaysOutputData": false,
+      "retryOnFail": false,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "id-1",
+                    "leftValue": "={{ $('Telegram Trigger').item.json.message.voice.file_id }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voice"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "id-2",
+                    "leftValue": "={{ $('Telegram Trigger').item.json.message.text }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6fbc8def-9750-4c52-97e0-5c450676f455",
+      "name": "Проверка типа сообщения",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1872,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -688,
+        192
+      ],
+      "id": "b1963481-2443-463f-80bb-9c90ecc16d57",
+      "name": "Typing...2",
+      "webhookId": "d7ccd777-0182-4d53-b00f-7dab50d87642",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a24226bd-c478-4f64-89f5-4e1935a52905",
+              "leftValue": "={{ $('Проверка наличия номера').item.json.hasPhone }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -960,
+        384
+      ],
+      "id": "702c56e1-9c9f-40eb-824e-6e86bfb411fe",
+      "name": "Есть ли номер?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a24226bd-c478-4f64-89f5-4e1935a52905",
+              "leftValue": "={{ $('Проверка наличия номера').item.json.hasPhone }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        656
+      ],
+      "id": "9ee8b18a-a0eb-4431-b4e4-4799806d7940",
+      "name": "Был ли номер?"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "result",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -448,
+        384
+      ],
+      "id": "de375814-198d-4cb8-8bbc-40e64167d2bd",
+      "name": "Merge",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "messageId": "={{ $('Сообщение о проверке').item.json.result.message_id }}",
+        "text": "={{ $('id, ответ').item.json['ответ'] }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        928,
+        784
+      ],
+      "id": "82dfdd80-00b9-4b61-a257-c0e8e35fdf33",
+      "name": "Edit a text message",
+      "webhookId": "07edd6c0-47bd-42ec-885e-7baf7a24f67e",
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\nfor (const item of items) {\n  let data = item.json;\n\n  let raw = data.output || data;\n\n  if (typeof raw === 'string') {\n    raw = raw.trim();\n\n    // убираем обёртку ```...``` если она есть\n    if (raw.startsWith('```')) {\n      // убираем первые ```... и последние ```\n      raw = raw.replace(/^```[a-zA-Z]*\\n?/, '').replace(/```$/, '').trim();\n    }\n\n    try {\n      raw = JSON.parse(raw);\n    } catch (error) {\n      raw = { error: 'Ошибка парсинга', raw };\n    }\n  }\n\n  newItems.push({\n    json: {\n      id_вопроса: raw.id_вопроса ?? null,\n      ответ: raw['Ответ'] ?? $input.first().json.output\n    }\n  });\n}\n\nreturn newItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        384
+      ],
+      "id": "511f86ee-00cf-43ec-abc6-92563e4a246d",
+      "name": "id, ответ"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "qa",
+          "mode": "list",
+          "cachedResultName": "qa"
+        },
+        "limit": 1,
+        "where": {
+          "values": [
+            {
+              "column": "id",
+              "value": "={{ $json['id_вопроса'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        688,
+        320
+      ],
+      "id": "deef7c7f-4f2a-4c6c-808e-eb5a06f998ab",
+      "name": "Информация о вопросе",
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "214522c6-e2ea-4084-ad83-d9be141c8fcb",
+              "leftValue": "={{ $json['id_вопроса'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        384
+      ],
+      "id": "c88f72cb-bbeb-4c85-a061-77caf442c447",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const newItems = [];\n\nfor (const item of items) {\n  let data = item.json;\n\n  // если input — строка, парсим\n  if (typeof data === 'string') {\n    try {\n      data = JSON.parse(data);\n    } catch (err) {\n      // парсинг не удался — продолжаем с тем, что есть\n    }\n  }\n\n  // ---- photos ----\n  const urlPhotoField = data.url_photo;\n  let photosObj = {};\n  let count_photo = 0;\n\n  if (typeof urlPhotoField === 'string' && urlPhotoField.trim() !== '') {\n    const urls = urlPhotoField\n      .split(',')\n      .map(u => u.trim())\n      .filter(Boolean);\n\n    count_photo = urls.length;\n    urls.forEach((u, idx) => {\n      photosObj[idx + 1] = u;\n    });\n  }\n\n  // ---- docs (новое) ----\n  const urlDocField = data.url_doc;\n  let docsObj = {};\n  let count_doc = 0;\n\n  if (typeof urlDocField === 'string' && urlDocField.trim() !== '') {\n    const urls = urlDocField\n      .split(',')\n      .map(u => u.trim())\n      .filter(Boolean);\n\n    count_doc = urls.length;\n    urls.forEach((u, idx) => {\n      docsObj[idx + 1] = u;\n    });\n  }\n\n  // ---- video ----\n  const urlVideoField = data.url_video;\n  const count_video =\n    (typeof urlVideoField === 'string' && urlVideoField.trim().length > 0) ? 1 : 0;\n\n  newItems.push({\n    json: {\n      id: data.id,\n      вопрос: data.вопрос,\n      ответ: data.ответ,\n      photos: photosObj,\n      docs: docsObj,          \n      url_video: urlVideoField,\n      count_photo: count_photo,\n      count_doc: count_doc, \n      count_video: count_video\n    }\n  });\n}\n\nreturn newItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        400
+      ],
+      "id": "d59a5576-e5e4-4df1-8048-b30bcfb7b589",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20c2048d-44da-4bb9-91c7-5bc8a2c523d5",
+                    "leftValue": "={{ $json.count_photo }}",
+                    "rightValue": 0,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.count_photo }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "4b9e8f93-0518-4e19-985e-639c2b0f64eb"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4faf993d-ab86-4700-b5dc-e327f707f02d",
+                    "leftValue": "={{ $json.count_photo }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ad1b1f6a-40a0-4bf3-8857-916d1a76254b",
+                    "leftValue": "={{ $json.count_photo }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "389845a5-760c-49f7-9145-6bc58ead548d",
+                    "leftValue": "={{ $json.count_photo }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1136,
+        352
+      ],
+      "id": "b26e9745-80a3-41c0-a59b-825109caad31",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "media": {
+          "media": [
+            {
+              "media": "={{ $('Code in JavaScript1').item.json.photos['1'] }}",
+              "additionalFields": {
+                "caption": "={{ $('id, ответ').item.json['ответ'] }}"
+              }
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1488,
+        400
+      ],
+      "id": "b83e9323-6d8d-4c2e-9593-ba218eec2ec7",
+      "name": "Send a media group message1",
+      "webhookId": "937a522f-7d99-45bf-9f0d-488668f95853",
+    },
+    {
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "media": {
+          "media": [
+            {
+              "media": "={{ $json.photos['1'] }}",
+              "additionalFields": {
+                "caption": "={{ $('id, ответ').item.json['ответ'] }}"
+              }
+            },
+            {
+              "media": "={{ $json.photos['2'] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1488,
+        608
+      ],
+      "id": "252224a4-b8f8-483b-a9c2-c5c0481edd6d",
+      "name": "Send a media group message2",
+      "webhookId": "937a522f-7d99-45bf-9f0d-488668f95853",
+    },
+    {
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "media": {
+          "media": [
+            {
+              "media": "={{ $json.photos['1'] || \"\" }}",
+              "additionalFields": {
+                "caption": "={{ $('id, ответ').item.json['ответ'] }}"
+              }
+            },
+            {
+              "media": "={{ $json.photos['2'] || \"\" }}",
+              "additionalFields": {}
+            },
+            {
+              "media": "={{ $json.photos['3'] || \"\" }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1504,
+        816
+      ],
+      "id": "c1462a4d-1fcb-4848-8513-182329c4f964",
+      "name": "Send a media group message3",
+      "webhookId": "937a522f-7d99-45bf-9f0d-488668f95853",
+    },
+    {
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "media": {
+          "media": [
+            {
+              "media": "={{ $json.photos['1'] || \"\" }}",
+              "additionalFields": {
+                "caption": "={{ $('id, ответ').item.json['ответ'] }}"
+              }
+            },
+            {
+              "media": "={{ $json.photos['2'] || \"\" }}",
+              "additionalFields": {}
+            },
+            {
+              "media": "={{ $json.photos['3'] || \"\" }}",
+              "additionalFields": {}
+            },
+            {
+              "media": "={{ $json.photos['4'] || \"\" }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1504,
+        1024
+      ],
+      "id": "07b54ab9-6a98-4075-8951-89ef73c405ea",
+      "name": "Send a media group message4",
+      "webhookId": "937a522f-7d99-45bf-9f0d-488668f95853",
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $('id, ответ').item.json['ответ'] }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1488,
+        240
+      ],
+      "id": "526cabbd-8526-444d-be1e-6b8be8a6798d",
+      "name": "Send a text message1",
+      "webhookId": "c275fd2d-46e9-49df-b348-10b1eed4ea3d",
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8053b068-0950-4760-a3a9-1c59d4fae8cb",
+              "leftValue": "={{ $('Code in JavaScript1').item.json.count_doc }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1936,
+        592
+      ],
+      "id": "ddbf01a1-2f8d-4f0f-a1b4-ac31f877acf2",
+      "name": "Наличие документа"
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "file": "={{ $('Code in JavaScript1').item.json.docs['1'] }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2336,
+        496
+      ],
+      "id": "f29297fb-12a2-45fb-942c-302156c9a4db",
+      "name": "Send a document",
+      "webhookId": "1006f8ec-5fdd-446d-b4f6-f9f265ef5cd9",
+      "retryOnFail": true,
+      "maxTries": 2,
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "action": "upload_document"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2336,
+        304
+      ],
+      "id": "f92e7d13-acce-4b7d-b893-495bcb4ed57f",
+      "name": "Typing...",
+      "webhookId": "d7ccd777-0182-4d53-b00f-7dab50d87642",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Проверка типа сообщения",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Typing...1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "id, ответ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q&A": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No_answer": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice": {
+      "main": [
+        [
+          {
+            "node": "Transcribe Voice (YandexSpeechKit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Voice (YandexSpeechKit)": {
+      "main": [
+        [
+          {
+            "node": "Сбор информации",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add number": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YandexGPT": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings YandexGPT": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Vector store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a sticker": {
+      "main": [
+        []
+      ]
+    },
+    "Сообщение о проверке": {
+      "main": [
+        [
+          {
+            "node": "Typing...2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Сбор информации": {
+      "main": [
+        [
+          {
+            "node": "Проверка наличия номера",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Проверка наличия номера": {
+      "main": [
+        [
+          {
+            "node": "Есть ли номер?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Typing...1": {
+      "main": [
+        []
+      ]
+    },
+    "Проверка типа сообщения": {
+      "main": [
+        [
+          {
+            "node": "Download Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Сбор информации",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Typing...2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Есть ли номер?": {
+      "main": [
+        [
+          {
+            "node": "Typing...2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Сообщение о проверке",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Был ли номер?": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit a text message": {
+      "main": [
+        []
+      ]
+    },
+    "id, ответ": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Информация о вопросе": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a media group message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a media group message2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a media group message3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a media group message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Информация о вопросе",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Был ли номер?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
+          {
+            "node": "Наличие документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a media group message1": {
+      "main": [
+        [
+          {
+            "node": "Наличие документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a media group message2": {
+      "main": [
+        [
+          {
+            "node": "Наличие документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a media group message3": {
+      "main": [
+        [
+          {
+            "node": "Наличие документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a media group message4": {
+      "main": [
+        [
+          {
+            "node": "Наличие документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Наличие документа": {
+      "main": [
+        [
+          {
+            "node": "Send a document",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Typing...",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f6644212-abab-44bd-b24d-17b19ca5de8c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7eb9833cac10a9af3ea791b1079b4caae9a135b7efeb3f12e3b5e739f5393c1f"
+  },
+  "id": "1kLDyyK9XMFP9AQN",
+  "tags": [
+    {
+      "updatedAt": "2025-11-03T07:59:32.048Z",
+      "createdAt": "2025-11-03T07:59:32.048Z",
+      "id": "zXfMMzGBdEtwGjOl",
+      "name": "AIvDelo"
+    }
+  ]
+}

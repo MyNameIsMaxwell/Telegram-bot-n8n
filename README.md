@@ -65,29 +65,34 @@ CREATE TABLE public.Nonanswered_questions (
 ```
 
 
-🚀 Развёртывание
-1. Клонирование репозитория
-git clone https://github.com/<your_username>/<your_repo_name>.git
-cd <your_repo_name>
+### 🚀 Развёртывание
 
-2. Настройка окружения
+1. **Клонирование репозитория**
 
-Создайте файл .env на основе .env.example и заполните переменные:
+   ```bash
+   git clone https://github.com/<your_username>/<your_repo_name>.git
+   cd <your_repo_name>
 
-POSTGRES_USER=
-POSTGRES_PASSWORD=
-POSTGRES_DB=
-TELEGRAM_TOKEN=
-YANDEX_API_KEY=
+2. **Настройка окружения**
+
+Создайте файл `.env` на основе `.env.example` и заполните переменные:
+
+    ```env
+    POSTGRES_USER=
+    POSTGRES_PASSWORD=
+    POSTGRES_DB=
+    TELEGRAM_TOKEN=
+    YANDEX_API_KEY=
 
 3. Запуск через Docker
-docker-compose up -d
+
+    ```bash
+    docker-compose up -d
 
 
 После запуска:
 
-n8n доступен по адресу: http://localhost:5678
+- **n8n** доступен по адресу: [http://localhost:5678](http://localhost:5678)
+- **PostgreSQL** — `localhost:5432`
 
-PostgreSQL — localhost:5432
-
-Импортируйте файл workflow.json в n8n и активируйте сценарий.
+Импортируйте файл [`workflow.json`](workflow.json) в n8n и активируйте сценарий.

@@ -1,0 +1,138 @@
+version: "3.9"
+
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: always
+    command:
+      # провайдер docker, не экспозим всё подряд автоматически
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+
+      # entrypoints: 80 -> редиректим на 443
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+
+      # основной HTTPS entrypoint
+      - "--entrypoints.websecure.address=:443"
+
+      # ACME: твоя схема tlschallenge как в официальном примере
+      - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
+      - "--certificatesresolvers.mytlschallenge.acme.email=${SSL_EMAIL}"
+      - "--certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json"
+
+      # Логи Traefik (можно DEBUG поначалу)
+      - "--log.level=INFO"
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      # куда Traefik будет класть/обновлять Let's Encrypt сертификаты
+      - traefik_data:/letsencrypt
+      # чтобы Traefik видел labels контейнеров
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    networks:
+      - web
+      - internal
+
+  pgvector-db:
+    image: pgvector/pgvector:pg17
+    restart: always
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: n8n
+      TZ: ${GENERIC_TIMEZONE}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    ports:
+      - "5544:5432"
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: always
+
+    ports:
+      - "127.0.0.1:5678:5678"
+
+    labels:
+      - "traefik.enable=true"
+
+      # правило маршрутизации по хосту (твой домен вида sub.domain.tld)
+      - "traefik.http.routers.n8n.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`)"
+
+      # говорим Traefik слушать и web (80) и websecure (443)
+      - "traefik.http.routers.n8n.entrypoints=web,websecure"
+
+      # включить TLS и использовать наш resolver (mytlschallenge)
+      - "traefik.http.routers.n8n.tls=true"
+      - "traefik.http.routers.n8n.tls.certresolver=mytlschallenge"
+
+      # security headers middleware (это прямо в твоём шаблоне)
+      - "traefik.http.middlewares.n8n.headers.SSLRedirect=true"
+      - "traefik.http.middlewares.n8n.headers.STSSeconds=315360000"
+      - "traefik.http.middlewares.n8n.headers.browserXSSFilter=true"
+      - "traefik.http.middlewares.n8n.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.n8n.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.n8n.headers.SSLHost=${DOMAIN_NAME}"
+      - "traefik.http.middlewares.n8n.headers.STSIncludeSubdomains=true"
+      - "traefik.http.middlewares.n8n.headers.STSPreload=true"
+      - "traefik.http.routers.n8n.middlewares=n8n@docker"
+
+      # если хочешь, можно ещё явно сказать Traefik,
+      # куда проксировать трафик внутри контейнера:
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+
+    environment:
+      # n8n должен знать свой публичный хост и что он https,
+      # иначе вебхуки/URL будут некорректные. :contentReference[oaicite:11]{index=11}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - N8N_RUNNERS_ENABLED=true
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - TZ=${GENERIC_TIMEZONE}
+
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=pgvector-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+
+      # шифрование кредов внутри n8n (обязательно сделай длинную случайную строку):
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+
+      # опционально — базовая http-авторизация на UI n8n
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+
+    depends_on:
+      - pgvector-db
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./local-files:/files
+    networks:
+      - web
+      - internal
+
+volumes:
+  n8n_data:
+  traefik_data:
+  pg_data:
+
+networks:
+  web:
+    driver: bridge
+  internal:
+    driver: bridge
